@@ -7,9 +7,9 @@ class Comment < ApplicationRecord
   private
 
   def moderate_content
-    moderation_result = Services::ModerationService.new(body).is_acceptable?
-    unless moderation_result
-      errors.add(:body, 'Your comment does not meet our community guidelines.')
+    moderation_result = Services::ModerationService.new(body).moderate
+    if moderation_result[:error]
+      errors.add(:body, moderation_result[:error])
       throw(:abort)
     end
   end

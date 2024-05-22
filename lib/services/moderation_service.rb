@@ -5,7 +5,7 @@ module Services
       @client = OpenAI::Client.new(access_token: ENV['OPENAI_API_KEY'])
     end
 
-    def is_acceptable?
+    def moderate
       response = send_to_chat_gpt
       parse_response(response)
     end
@@ -16,21 +16,20 @@ module Services
       @client.chat(
         parameters: {
           model: 'gpt-4',
-          messages: [chat_moderation_message],
-          functions: [
-            chat_moderation_function
+          messages: [
+            { "content": moderate_for_language_prompt(@reply_content), "role": 'user' },
+            { "content": moderate_for_sexual_content_prompt(@reply_content), "role": 'user' }
           ],
-          temperature: 0.5
+          functions: [
+            language_moderation_function,
+            sexual_content_moderation_function
+          ],
+          temperature: 0.7
         }
       )
     end
 
-    def chat_moderation_message
-      { "content": moderation_prompt(@reply_content),
-        "role": 'user' }
-    end
-
-    def moderation_prompt(text)
+    def moderate_for_language_prompt(text)
       "Post Content: #{text}
 
       Automated Analysis and Decision:
@@ -38,12 +37,19 @@ module Services
       Check for Inappropriate Language:
       Search for swear words, offensive language, or inappropriate language.
       Verify against non-english swear words as well.
+      Moderation Decision:
+
+      If any of the above checks are positive, return 'Reject'.
+      If none of the above issues are present, return 'Accept'."
+    end
+
+    def moderate_for_sexual_content_prompt(text)
+      "Post Content: #{text}
+
+      Automated Analysis and Decision:
+
       Scan for Sexual Content:
       Identify any sexual references, implications, or innuendos.
-      Assess for Threatening or Violent Behavior:
-      Detect any threats (direct or indirect) or mentions of violence.
-      Examine for Hate Speech or Discrimination:
-      Look for hate speech or discriminatory remarks based on race, gender, religion, etc.
 
       Moderation Decision:
 
@@ -51,10 +57,23 @@ module Services
       If none of the above issues are present, return 'Accept'."
     end
 
-    def chat_moderation_function
+
+    def language_moderation_function
       {
-        name: 'content_acceptable',
-        description: 'Moderate the content. It accepts one of two strings: "Accept" or "Reject".',
+        name: 'moderate_language',
+        description: 'Used to determine if language is acceptable. It accepts one of two strings: "Accept" or "Reject".',
+        parameters: {
+          type: 'object',
+          properties: chat_moderation_properties,
+          required: ['decision']
+        }
+      }
+    end
+
+    def sexual_content_moderation_function
+      {
+        name: 'moderate_sexual_content',
+        description: 'Used to determine if post contains sexual content. It accepts one of two strings: "Accept" or "Reject".',
         parameters: {
           type: 'object',
           properties: chat_moderation_properties,
@@ -88,14 +107,25 @@ module Services
       send(function_name, **args)
     end
 
-    def content_acceptable(decision:)
+    def moderate_language(decision:)
       case decision
       when 'Accept'
-        true
+        {}
       when 'Reject'
-        false
+        {error: 'Your comment contains inappropriate language.'}
       else
-        false
+        {error: 'Your comment contains inappropriate language.'}
+      end
+    end
+
+    def moderate_sexual_content(decision:)
+      case decision
+      when 'Accept'
+        {}
+      when 'Reject'
+        {error: 'Your comment contains sexual content.'}
+      else
+        {error: 'Your comment contains sexual content.'}
       end
     end
   end
