@@ -7,9 +7,10 @@ class Comment < ApplicationRecord
   private
 
   def moderate_content
-    moderation_result = Services::ModerationService.new(body).moderate
-    if moderation_result[:error]
-      errors.add(:body, moderation_result[:error])
+    moderation_results = Services::ModerationService.new(body).moderate
+    if moderation_results[:flagged] == true
+      categories = moderation_results[:categories].join(', ')
+      errors.add(:body, "This comment has been flagged as inappropriate because it contains the following categories: #{categories}")
       throw(:abort)
     end
   end

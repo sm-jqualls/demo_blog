@@ -6,11 +6,22 @@ module Services
     end
 
     def moderate
-      response = send_to_chat_gpt
-      parse_response(response)
+      response = @client.moderations(parameters: { input: @reply_content })
+      moderation_results(response)
     end
 
     private
+
+    def moderation_results(response)
+      flagged = response['results'].any? { |result| result['flagged'] }
+      categories = response['results'][0]['categories'].select { |key, value| value }.keys
+
+      {
+        flagged: flagged,
+        categories: categories
+      }
+    end
+
 
     def send_to_chat_gpt
       @client.chat(
